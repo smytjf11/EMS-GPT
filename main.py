@@ -9,8 +9,15 @@ from pathlib import Path
 import sys
 
 from dotenv import load_dotenv
-from llama_index import GPTSimpleVectorIndex, LLMPredictor, ServiceContext, download_loader
+from llama_index import GPTSimpleVectorIndex, ComposableGraph, LLMPredictor, ServiceContext, download_loader
 import openai
+
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin, urlparse
+import pandas as pd
+
+from site_scraper import recursive_scrape
 
 
 load_dotenv()
@@ -26,8 +33,7 @@ def init():
 
 def handle_exit():
     print("\nGoodbye!\n")
-    sys.exit(1)
-
+    
 
 def ask(file):
     print("👀 Loading...")
@@ -35,7 +41,7 @@ def ask(file):
     loader = PDFReader()
     documents = loader.load_data(file=Path(file))
 
-    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name="text-davinci-003"))
+    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name="gpt3.5-turbo"))
 
     service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, chunk_size_limit=1024)
     index = GPTSimpleVectorIndex.from_documents(documents, service_context=service_context)
@@ -93,10 +99,15 @@ def select_file():
 
 
 if __name__ == "__main__":
+    import pickle
     init()
-    file = select_file()
-    if file:
-        ask(file)
-    else:
-        print("No files found")
-        handle_exit()
+    starting_url = 'https://www.ruralhealthinfo.org'
+    scrapes = recursive_scrape(starting_url)
+    scrapes.to_pickle("./ruralhealthinfo")
+    
+    llm_predictor = LLMPredictor(llm=OpenAI(temperature=0, model_name="gpt3.5-turbo"))
+    service_context = ServiceContext.from_defaults(llm_predictor=llm_predictor, chunk_size_limit=1024)
+
+    docs = GPTSimpleVectorIndex.from_documents(scrapes['text'], service_context=service_context)
+    docs.query("What is the most important tool a rural community can do to prepare for risk of flooding?")
+
